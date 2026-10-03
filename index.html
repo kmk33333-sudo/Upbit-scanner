@@ -3,7 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f2f3f7">
+<meta name="theme-color" content="#12141d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="60·120">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAD70lEQVR42u3dP24TQRTAYSfiBJgGISjooqRJmY6KAs5AR5NTIE5BQ5czmMIVXUqaWO4okBAVd6BwgxLHnv0zszvzvl+JBArJpzdv19745OmzlwtpX6e+BYJDcAgOwSE4BIfgEByCQ3BIcAgOwSE4BIfgEByCQ3AIDgkOwSE4BIfgEByCQ3AIDsEhwSE4BIfgEByCQ3AIDsEhOASH2urv2/fD/5Envo9AmBxkwBHSxF4Zw7k4VqofFTlmBhxOEDiwsHOQMTomOCpeOXN34mO82jtEluuVnQOLXCzgiL5vwhGFxbgzAw4s4GixfCDgqHhslGEBh90TDpepfet5E+z5i9d+zOndnZ8N+esXm+3wr+HP758mRzsyRjExweRQyvGxXK/6HSLlTxA4Zr1V7CTNhAUcoZdNO0cFzZMFHLM4Sub8n4JjgkOkChlw2C3gwKJX3kMqOMYYGL23zhrHxsJ9jnyXIeXvaL379Oven3z7/MrOMcf1opiMhyYspDOtjIl8IODIMjYKsChjAo6aWBQ2AcceE51eYc+9ck4FwtXKfEfFuCZcrUxwPdLekIBjXhcjszURGkf59aKMg4GHSPSdo/B6UcDE6CAiTo5iLCodEo6VjDJaMhELR76rktoPjtA4cpwmTQ6JQDhyXI+0PSRCXK2MOyriDInGJ8eIi0VwE0Mnx9yesr87P7vYbLs+snyx2V5+/F7gy/vx9c3k36KgT9nvTCTK2Bn6cPVlsVhcXjUOIvrO0ek02ZkIfliEmByzYtGSibpxdN09M8loEkTdOIb8UhQmWt45ppoZcUDUOjnKLxkxTdSHo6SM4CYqwHH/NuXtdYqJm9vrTjI4qGnneHjr+iaBRaeZAURNk+PAaxnpMo6yYKImHIdf3xqLBRM14Tj6mufwcwSImnCkvwg+RAYTNeHo+saIRBn/mwCiJhy93ynTSQYTNeEo8+6p5Xq1WGNRCY5RTKTMjEp/55rJkZeFpmror5occvanyzA2qsRBhmNltHaTptPjRn5IjePocfpgMXnjvCq795rlMRBHxwYWzU4Ot6fg6GMiZdUwNlq7WhlrWpARcSE1M+DoKQOLpnCkP2Wf8nzz3J7Zb7IeT9nnvUN6WMbus9on/8R2PVbed587UOwcNlA4DIxgnZKhQjjIgKP/nqHQx4qxAYexAYexAYc9VNNMDjLi4jg8NsiIi4MMOJwmcLh8VYHJYWyExnFgbJARHcdyvYIAjm7HBzFwGCFwdBwhlLRUax8dqgouZQWH4BAcEhyCQ3AIDsEhOASH4BAcgkOCQ3AIDsEhOASH4BAcgkNwCA4JDsEhOASH4BAcgkNwCA7BIcGhtP4BKtGdD3VqbZUAAAAASUVORK5CYII=">
+<link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAD70lEQVR42u3dP24TQRTAYSfiBJgGISjooqRJmY6KAs5AR5NTIE5BQ5czmMIVXUqaWO4okBAVd6BwgxLHnv0zszvzvl+JBArJpzdv19745OmzlwtpX6e+BYJDcAgOwSE4BIfgEByCQ3BIcAgOwSE4BIfgEByCQ3AIDgkOwSE4BIfgEByCQ3AIDsEhwSE4BIfgEByCQ3AIDsEhOASH2urv2/fD/5Envo9AmBxkwBHSxF4Zw7k4VqofFTlmBhxOEDiwsHOQMTomOCpeOXN34mO82jtEluuVnQOLXCzgiL5vwhGFxbgzAw4s4GixfCDgqHhslGEBh90TDpepfet5E+z5i9d+zOndnZ8N+esXm+3wr+HP758mRzsyRjExweRQyvGxXK/6HSLlTxA4Zr1V7CTNhAUcoZdNO0cFzZMFHLM4Sub8n4JjgkOkChlw2C3gwKJX3kMqOMYYGL23zhrHxsJ9jnyXIeXvaL379Oven3z7/MrOMcf1opiMhyYspDOtjIl8IODIMjYKsChjAo6aWBQ2AcceE51eYc+9ck4FwtXKfEfFuCZcrUxwPdLekIBjXhcjszURGkf59aKMg4GHSPSdo/B6UcDE6CAiTo5iLCodEo6VjDJaMhELR76rktoPjtA4cpwmTQ6JQDhyXI+0PSRCXK2MOyriDInGJ8eIi0VwE0Mnx9yesr87P7vYbLs+snyx2V5+/F7gy/vx9c3k36KgT9nvTCTK2Bn6cPVlsVhcXjUOIvrO0ek02ZkIfliEmByzYtGSibpxdN09M8loEkTdOIb8UhQmWt45ppoZcUDUOjnKLxkxTdSHo6SM4CYqwHH/NuXtdYqJm9vrTjI4qGnneHjr+iaBRaeZAURNk+PAaxnpMo6yYKImHIdf3xqLBRM14Tj6mufwcwSImnCkvwg+RAYTNeHo+saIRBn/mwCiJhy93ynTSQYTNeEo8+6p5Xq1WGNRCY5RTKTMjEp/55rJkZeFpmror5occvanyzA2qsRBhmNltHaTptPjRn5IjePocfpgMXnjvCq795rlMRBHxwYWzU4Ot6fg6GMiZdUwNlq7WhlrWpARcSE1M+DoKQOLpnCkP2Wf8nzz3J7Zb7IeT9nnvUN6WMbus9on/8R2PVbed587UOwcNlA4DIxgnZKhQjjIgKP/nqHQx4qxAYexAYexAYc9VNNMDjLi4jg8NsiIi4MMOJwmcLh8VYHJYWyExnFgbJARHcdyvYIAjm7HBzFwGCFwdBwhlLRUax8dqgouZQWH4BAcEhyCQ3AIDsEhOASH4BAcgkOCQ3AIDsEhOASH4BAcgkNwCA4JDsEhOASH4BAcgkNwCA7BIcGhtP4BKtGdD3VqbZUAAAAASUVORK5CYII=">
+
 <title>업비트 60·120 스캐너</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -27,6 +34,7 @@
   --ma60:#ff5a68; --ma120:#5c93ff; --price:#5d6380; --focus:#9a90ff; color-scheme:dark}
 
 *{box-sizing:border-box}
+html::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:20}
 html{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--sans);-webkit-text-size-adjust:100%}
 .wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:0 40px}
