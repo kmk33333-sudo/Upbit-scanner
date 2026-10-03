@@ -40,14 +40,15 @@ h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em;text-wrap:balan
 h1 .k60{color:var(--ma60)} h1 .k120{color:var(--ma120)}
 .sub{margin:4px 0 0;color:var(--muted);font-size:13px}
 
+.bar>*{min-width:0}
 .bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;display:grid;gap:8px;border-bottom:1px solid var(--line)}
 .seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
-.seg button{flex:1;border:0;background:transparent;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;white-space:nowrap}
+.seg button{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;border:0;background:transparent;padding:7px 4px;border-radius:7px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .row2{display:flex;gap:8px}
 .row2 input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
 .row2 select{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 6px;font-size:13px;max-width:44%}
-.scan{border:0;background:var(--up);color:#fff;border-radius:10px;padding:0 14px;font-weight:700;font-size:14px;cursor:pointer}
+.scan{flex:none;border:0;background:var(--up);color:#fff;border-radius:10px;padding:0 14px;font-weight:700;font-size:14px;cursor:pointer}
 .scan:disabled{opacity:.55;cursor:default}
 
 .status{padding-block:12px 4px;font-size:13px;color:var(--muted);display:grid;gap:6px}
@@ -81,6 +82,14 @@ li.item{background:var(--surface)}
 .detail a{color:var(--focus);font-size:13px;font-weight:500}
 
 .empty{padding:28px 14px;text-align:center;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:12px;margin-top:8px}
+.live{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--muted)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--price)}
+.live.on i{background:#1fa463;box-shadow:0 0 0 3px color-mix(in srgb,#1fa463 25%,transparent)}
+.live.bad i{background:var(--up)}
+.diag{margin-top:8px;font:12px/1.5 var(--mono);color:var(--muted);white-space:pre-wrap;word-break:break-all}
+.flash-up{animation:fu .8s} .flash-down{animation:fd .8s}
+@keyframes fu{from{background:color-mix(in srgb,var(--up) 22%,transparent)}}
+@keyframes fd{from{background:color-mix(in srgb,var(--down) 22%,transparent)}}
 footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
 @media (prefers-reduced-motion:reduce){.prog i{transition:none}}
 </style>
@@ -89,7 +98,8 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
 <div class="wrap">
   <header>
     <h1>업비트 <span class="k60">60일선</span> &gt; <span class="k120">120일선</span></h1>
-    <p class="sub">일봉 종가 기준 단순이동평균(SMA). 60일선이 120일선 위에 있는 코인만 보여줍니다.</p>
+    <p class="sub">일봉 종가 기준 단순이동평균(SMA). 오늘 일봉은 실시간 체결가로 계속 다시 계산합니다.</p>
+    <div class="live" id="live" role="status"><i></i><span id="liveText">실시간 연결 대기</span></div>
   </header>
 
   <div class="bar">
@@ -130,7 +140,7 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
   <div class="empty" id="empty" hidden>조건에 맞는 코인이 없어요.</div>
 
   <footer>
-    데이터: 업비트 공개 시세 API (로그인·API 키 불필요). 오늘 일봉은 진행 중인 값이 포함되며, 업비트 일봉은 오전 9시(KST)에 바뀝니다.
+    데이터: 업비트 공개 시세 API (로그인·API 키 불필요). 현재가는 웹소켓으로 실시간 반영하고, 일봉은 저장소의 자동 수집(30분 간격)에서 받습니다. 업비트 일봉은 오전 9시(KST)에 바뀝니다.
     상장 120일 미만 코인은 120일선을 계산할 수 없어 제외됩니다. 투자 판단의 참고용이며 매매 권유가 아닙니다.
   </footer>
 </div>
@@ -138,10 +148,14 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
 <script>
 (() => {
   const API = "https://api.upbit.com/v1";
+  const WS_URL = "wss://api.upbit.com/websocket/v1";
+  const RESCAN_MS = 5 * 60 * 1000;    // 일봉 데이터 다시 받는 주기
   const $ = id => document.getElementById(id);
   const state = { quote: "KRW", range: 0, sort: "cross", q: "", data: null, open: new Set(), scanning: false };
+  let series = {};      // market -> { closes:[], dates:[], meta }
+  let ws = null, wsRetry = 0, wsTimer = null, lastTick = 0, renderPending = false, rescanTimer = null;
+  const prevPrice = {};
 
-  // ---------- storage (optional) ----------
   const store = {
     get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
     set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -153,9 +167,11 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   async function getJSON(url, tries = 5) {
     for (let i = 0; i < tries; i++) {
-      const res = await fetch(url, { headers: { accept: "application/json" } });
+      let res;
+      try { res = await fetch(url, { headers: { accept: "application/json" } }); }
+      catch (e) { const err = new Error("연결 실패"); err.blocked = true; err.url = url; throw err; }
       if (res.status === 429) { await sleep(500 * (i + 1)); continue; }
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!res.ok) { const err = new Error("HTTP " + res.status); err.url = url; throw err; }
       return res.json();
     }
     throw new Error("요청 한도 초과(429)");
@@ -170,9 +186,7 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
     }
     return out;
   }
-  function analyze(candles) {
-    const c = candles.slice().reverse(); // oldest -> newest
-    const closes = c.map(x => x.trade_price);
+  function analyze(closes, dates) {
     if (closes.length < 120) return { short: true };
     const m60 = sma(closes, 60), m120 = sma(closes, 120);
     const L = closes.length - 1;
@@ -181,73 +195,199 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
     if (above) {
       let i = L;
       while (i >= 119 && m60[i] > m120[i]) i--;
-      if (i < 119) older = true;          // above for the whole window we can see
-      else crossDays = L - (i + 1);       // 0 = crossed today
+      if (i < 119) older = true; else crossDays = L - (i + 1);
     }
-    const tail = 60, s = Math.max(119, L - tail + 1);
+    const s = Math.max(119, L - 59);
     return {
-      above, crossDays, older,
-      ma60: m60[L], ma120: m120[L],
-      gap: m60[L] / m120[L] - 1,
-      close: closes[L],
-      spark: { c: closes.slice(s), a: m60.slice(s), b: m120.slice(s), d: c.slice(s).map(x => x.candle_date_time_kst.slice(5,10)) },
-      visible: L - 119
+      above, crossDays, older, ma60: m60[L], ma120: m120[L], gap: m60[L] / m120[L] - 1, close: closes[L],
+      spark: { c: closes.slice(s), a: m60.slice(s), b: m120.slice(s), d: dates.slice(s) }, visible: L - 119
     };
   }
 
-  // ---------- scan ----------
-  async function scan() {
-    if (state.scanning) return;
-    state.scanning = true; $("scanBtn").disabled = true; $("err").hidden = true;
-    const quote = state.quote;
-    setProgress(0, "마켓 목록을 불러오는 중…");
-    try {
-      const all = await getJSON(API + "/market/all?isDetails=true");
-      const markets = all.filter(m => m.market.startsWith(quote + "-"));
-      const tick = {};
-      for (let i = 0; i < markets.length; i += 100) {
-        const chunk = markets.slice(i, i + 100).map(m => m.market).join(",");
-        (await getJSON(API + "/ticker?markets=" + chunk)).forEach(t => tick[t.market] = t);
-      }
-      const results = []; let done = 0, short = 0, failed = 0;
-      const queue = markets.slice();
-      const worker = async () => {
-        while (queue.length) {
-          const m = queue.shift();
-          try {
-            const candles = await getJSON(API + "/candles/days?market=" + m.market + "&count=200");
-            const a = analyze(candles);
-            if (a.short) short++;
-            else if (a.above) {
-              const t = tick[m.market] || {};
-              results.push({
-                market: m.market, sym: m.market.split("-")[1], name: m.korean_name, en: m.english_name,
-                warn: m.market_warning === "CAUTION" || !!(m.market_event && m.market_event.warning),
-                price: t.trade_price ?? a.close, chg: t.signed_change_rate ?? 0, vol: t.acc_trade_price_24h ?? 0, ...a
-              });
-            }
-          } catch { failed++; }
-          done++;
-          setProgress(done / markets.length, `${markets.length}종목 중 ${done}종목 확인 중…`);
-          await sleep(380);
-        }
+  // series(전 종목) -> 결과 목록 재계산
+  function rebuild() {
+    if (!state.data) return;
+    const items = [];
+    for (const m in series) {
+      const s = series[m]; if (s.short) continue;
+      const a = analyze(s.closes, s.dates);
+      if (a.above) items.push({ ...s.meta, price: s.price, chg: s.chg, vol: s.vol, ...a });
+    }
+    state.data.items = items;
+  }
+
+  // ---------- 데이터 받기 ----------
+  // 1순위: GitHub Actions가 30분마다 만들어 두는 data/<마켓>.json (같은 사이트라 브라우저 제한 없음)
+  // 2순위: 업비트 API 직접 호출 (브라우저가 허용하는 환경에서만 동작)
+  async function loadPrepared(quote) {
+    const urls = ["data/" + quote + ".json"];
+    const gh = location.hostname.match(/^([^.]+)\.github\.io$/i);
+    if (gh) {
+      const repo = location.pathname.split("/").filter(Boolean)[0] || (gh[1] + ".github.io");
+      urls.push(`https://raw.githubusercontent.com/${gh[1]}/${repo}/main/data/${quote}.json`);
+    }
+    for (const u of urls) {
+      try {
+        const res = await fetch(u + "?t=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) continue;
+        const j = await res.json();
+        if (j && Array.isArray(j.markets) && j.markets.length) return j;
+      } catch {}
+    }
+    return null;
+  }
+  function fromPrepared(j) {
+    const next = {}; let short = 0;
+    for (const x of j.markets) {
+      const s = {
+        closes: x.c.slice(), dates: x.d, price: x.p ?? x.c[x.c.length - 1], chg: x.r || 0, vol: x.v || 0,
+        meta: { market: x.m, sym: x.m.split("-")[1], name: x.k, en: x.e, warn: !!x.w }
       };
-      await Promise.all([worker(), worker(), worker()]);
-      state.data = { quote, at: Date.now(), total: markets.length, short, failed, items: results };
+      s.short = s.closes.length < 120; if (s.short) short++;
+      next[x.m] = s;
+    }
+    return { next, short, total: j.total || j.markets.length, failed: Math.max(0, (j.total || 0) - j.markets.length), at: j.at };
+  }
+
+  async function scanDirect(quote, silent) {
+    const all = await getJSON(API + "/market/all?isDetails=true");
+    const markets = all.filter(m => m.market.startsWith(quote + "-"));
+    const tick = {};
+    for (let i = 0; i < markets.length; i += 100) {
+      const chunk = markets.slice(i, i + 100).map(m => m.market).join(",");
+      (await getJSON(API + "/ticker?markets=" + chunk)).forEach(t => tick[t.market] = t);
+    }
+    const next = {}; let done = 0, short = 0, failed = 0;
+    const queue = markets.slice();
+    const worker = async () => {
+      while (queue.length) {
+        const m = queue.shift();
+        try {
+          const raw = (await getJSON(API + "/candles/days?market=" + m.market + "&count=200")).reverse();
+          const t = tick[m.market] || {};
+          const s = {
+            closes: raw.map(x => x.trade_price), dates: raw.map(x => x.candle_date_time_kst.slice(5, 10)),
+            price: t.trade_price ?? raw[raw.length - 1]?.trade_price, chg: t.signed_change_rate ?? 0, vol: t.acc_trade_price_24h ?? 0,
+            meta: { market: m.market, sym: m.market.split("-")[1], name: m.korean_name, en: m.english_name,
+                    warn: m.market_warning === "CAUTION" || !!(m.market_event && m.market_event.warning) }
+          };
+          s.short = s.closes.length < 120; if (s.short) short++;
+          next[m.market] = s;
+        } catch { failed++; }
+        done++;
+        if (!silent) setProgress(done / markets.length, `${markets.length}종목 중 ${done}종목 확인 중…`);
+        await sleep(380);
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    return { next, short, failed, total: markets.length, at: Date.now() };
+  }
+
+  async function scan(silent) {
+    if (state.scanning) return;
+    state.scanning = true; $("scanBtn").disabled = true;
+    if (!silent) $("err").hidden = true;
+    const quote = state.quote;
+    if (!silent) setProgress(0, "데이터를 불러오는 중…");
+    try {
+      let r = null;
+      const prepared = await loadPrepared(quote);
+      if (prepared) r = fromPrepared(prepared);
+      else r = await scanDirect(quote, silent);
+      if (quote !== state.quote) return;
+      series = r.next;
+      state.data = { quote, at: r.at, total: r.total, short: r.short, failed: r.failed, items: [], source: prepared ? "자동 수집" : "직접 수집" };
+      rebuild();
       store.set("ma-cache-" + quote, state.data);
+      $("err").hidden = true;
       render();
+      connectWS();
     } catch (e) {
-      const blocked = e instanceof TypeError;
-      $("err").hidden = false;
-      $("err").textContent = blocked
-        ? "업비트 서버에 연결하지 못했어요. 인터넷 연결을 확인하고, 이 파일을 Claude 미리보기가 아니라 폰의 Chrome·Safari 같은 브라우저에서 직접 열어 주세요."
-        : "불러오는 중 문제가 생겼어요 (" + e.message + "). 잠시 후 스캔을 다시 눌러 주세요.";
-      setProgress(null, state.data ? "" : "스캔하지 못했어요.");
+      await showError(e);
+      if (!silent) setProgress(null, state.data ? "" : "스캔하지 못했어요.");
       if (state.data) render();
     } finally {
       state.scanning = false; $("scanBtn").disabled = false;
+      clearTimeout(rescanTimer); rescanTimer = setTimeout(() => scan(true), RESCAN_MS);
     }
   }
+
+  // 무엇이 막혔는지 확인: 서버 도달 여부(no-cors), 웹소켓 연결 여부
+  async function probe() {
+    let reach = "확인 불가", wsOk = "확인 불가";
+    try { await fetch(API + "/market/all", { mode: "no-cors", cache: "no-store" }); reach = "도달함"; } catch { reach = "도달 못함"; }
+    wsOk = await new Promise(res => {
+      try {
+        const s = new WebSocket(WS_URL); const t = setTimeout(() => { try { s.close(); } catch {} res("응답 없음"); }, 5000);
+        s.onopen = () => { clearTimeout(t); s.close(); res("연결됨"); };
+        s.onerror = () => { clearTimeout(t); res("실패"); };
+      } catch { res("실패"); }
+    });
+    return { reach, wsOk };
+  }
+
+  async function showError(e) {
+    $("err").hidden = false;
+    const where = location.protocol === "file:" ? "폰에 저장된 파일(file://)" : location.origin + location.pathname;
+    if (!e.blocked) {
+      $("err").innerHTML = `불러오는 중 문제가 생겼어요 (${esc(e.message)}). 잠시 후 스캔을 다시 눌러 주세요.<div class="diag">${esc(e.url || "")}</div>`;
+      return;
+    }
+    $("err").innerHTML = `업비트 데이터를 받지 못했어요. 원인을 확인하는 중…`;
+    const p = await probe();
+    const corsOnly = p.reach === "도달함";
+    $("err").innerHTML = (corsOnly
+      ? `이 브라우저는 업비트 서버에 닿지만, 웹페이지에서 업비트 데이터를 직접 읽는 것을 막고 있어요. 저장소에 자동 수집(GitHub Actions)을 설정하면 해결돼요.`
+      : `업비트 서버에 닿지 못했어요. 인터넷 연결이나 브라우저 설정(콘텐츠 차단기 등)을 확인해 주세요.`)
+      + `<div class="diag">열린 위치: ${esc(where)}\n자동 수집 파일(data/${esc(state.quote)}.json): 없음\n업비트 서버: ${p.reach}\n실시간 웹소켓: ${p.wsOk}\n실패한 요청: ${esc(e.url || "")}</div>`;
+  }
+
+  // ---------- realtime (WebSocket ticker) ----------
+  function setLive(cls, text) { $("live").className = "live " + cls; $("liveText").textContent = text; }
+  function connectWS() {
+    const codes = Object.keys(series);
+    if (!codes.length || !("WebSocket" in window)) return;
+    try { ws && ws.close(); } catch {}
+    clearTimeout(wsTimer);
+    setLive("", "실시간 연결 중…");
+    const sock = new WebSocket(WS_URL); ws = sock;
+    sock.binaryType = "arraybuffer";
+    const dec = new TextDecoder();
+    sock.onopen = () => {
+      wsRetry = 0;
+      sock.send(JSON.stringify([{ ticket: "ma-" + Math.random().toString(36).slice(2) }, { type: "ticker", codes }, { format: "DEFAULT" }]));
+      setLive("on", "실시간 연결됨");
+    };
+    sock.onmessage = ev => {
+      let t; try { t = JSON.parse(typeof ev.data === "string" ? ev.data : dec.decode(ev.data)); } catch { return; }
+      const s = series[t.code]; if (!s || t.type !== "ticker") return;
+      s.price = t.trade_price; s.chg = t.signed_change_rate; s.vol = t.acc_trade_price_24h;
+      if (s.closes.length) s.closes[s.closes.length - 1] = t.trade_price;   // 오늘 일봉 종가 = 현재가
+      lastTick = Date.now();
+      scheduleRender();
+    };
+    sock.onerror = () => {};
+    sock.onclose = () => {
+      if (ws !== sock) return;
+      setLive("bad", "실시간 끊김 · 다시 연결 중");
+      wsTimer = setTimeout(connectWS, Math.min(30000, 1000 * 2 ** wsRetry++));
+    };
+  }
+  function scheduleRender() {
+    if (renderPending) return; renderPending = true;
+    setTimeout(() => { renderPending = false; rebuild(); render(true); }, 1500);
+  }
+  setInterval(() => {
+    if (ws && ws.readyState === 1 && lastTick) {
+      const sec = Math.round((Date.now() - lastTick) / 1000);
+      setLive("on", `실시간 연결됨 · 마지막 체결 ${sec}초 전`);
+    }
+  }, 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (state.data && Date.now() - state.data.at > RESCAN_MS) scan(true);
+    else if (!ws || ws.readyState > 1) connectWS();
+  });
 
   function setProgress(p, text) {
     $("prog").hidden = p === null;
@@ -259,8 +399,9 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
   function fmtPrice(v, quote) {
     if (v == null) return "-";
     if (quote === "BTC") return v.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
-    const d = v >= 1000 ? 0 : v >= 100 ? 1 : v >= 1 ? 2 : v >= 0.01 ? 4 : 6;
-    return v.toLocaleString("ko-KR", { minimumFractionDigits: quote === "USDT" ? Math.max(2, d) : d, maximumFractionDigits: quote === "USDT" ? Math.max(2, d) : d });
+    let d = v >= 1000 ? 0 : v >= 100 ? 1 : v >= 1 ? 2 : v >= 0.01 ? 4 : 6;
+    if (quote === "USDT") d = Math.max(2, d);
+    return v.toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
   }
   const pct = v => (v > 0 ? "+" : "") + (v * 100).toFixed(2) + "%";
   function fmtVol(v, quote) {
@@ -280,7 +421,7 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
     const line = arr => arr.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
     let extra = "";
     if (big) {
-      extra = [0.25, 0.5, 0.75].map(f => `<line x1="0" x2="${W}" y1="${(pad + f * (h - pad * 2)).toFixed(1)}" y2="${(pad + f * (h - pad * 2)).toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`).join("")
+      extra = [0.25, 0.5, 0.75].map(f => { const yy = (pad + f * (h - pad * 2)).toFixed(1); return `<line x1="0" x2="${W}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`; }).join("")
         + `<text x="2" y="12" font-size="11" fill="var(--muted)" font-family="var(--mono)">${esc(sp.d[0])}</text>`
         + `<text x="${W - 2}" y="12" font-size="11" fill="var(--muted)" text-anchor="end" font-family="var(--mono)">${esc(sp.d[n - 1])}</text>`;
     }
@@ -293,7 +434,7 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
   }
 
   // ---------- render ----------
-  function render() {
+  function render(fromTick) {
     syncControls();
     const d = state.data;
     if (!d) { $("list").hidden = $("empty").hidden = $("legend").hidden = true; return; }
@@ -310,9 +451,11 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
     const t = new Date(d.at);
     const when = `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
     const filtered = state.range || q ? ` · 필터 결과 <b>${items.length}</b>` : "";
-    $("statusText").innerHTML = `${d.quote} 마켓 ${d.total}종목 중 <b>${d.items.length}종목</b>이 60일선 위${filtered}<br>`
-      + `상장 120일 미만 ${d.short}종목 제외${d.failed ? ` · 불러오기 실패 ${d.failed}` : ""} · 기준 ${when}`;
-    $("prog").hidden = true;
+    if (!state.scanning || fromTick) {
+      $("statusText").innerHTML = `${d.quote} 마켓 ${d.total}종목 중 <b>${d.items.length}종목</b>이 60일선 위${filtered}<br>`
+        + `상장 120일 미만 ${d.short}종목 제외${d.failed ? ` · 불러오기 실패 ${d.failed}` : ""} · 일봉 기준 ${when}${d.source ? " (" + d.source + ")" : ""}`;
+      $("prog").hidden = true;
+    }
 
     $("legend").hidden = items.length === 0;
     $("empty").hidden = items.length !== 0;
@@ -320,11 +463,13 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
     $("list").innerHTML = items.map(it => {
       const isOpen = state.open.has(it.market);
       const cls = it.chg > 0 ? "up" : it.chg < 0 ? "down" : "";
+      const p0 = prevPrice[it.market]; prevPrice[it.market] = it.price;
+      const flash = fromTick && p0 != null && p0 !== it.price ? (it.price > p0 ? "flash-up" : "flash-down") : "";
       const fresh = !it.older && it.crossDays <= 5;
       return `<li class="item">
         <button class="itembtn" data-m="${esc(it.market)}" aria-expanded="${isOpen}">
           <div class="name">${esc(it.name)}<span class="sym">${esc(it.sym)}</span></div>
-          <div class="price num ${cls}">${fmtPrice(it.price, d.quote)}</div>
+          <div class="price num ${cls} ${flash}">${fmtPrice(it.price, d.quote)}</div>
           <div class="meta">
             ${fresh ? `<span class="badge new">${crossLabel(it)}</span>` : `<span>${crossLabel(it)}</span>`}
             <span>· 이격 <span class="num up">${pct(it.gap)}</span></span>
@@ -357,8 +502,9 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
   $("quoteSeg").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || state.scanning || b.dataset.q === state.quote) return;
     state.quote = b.dataset.q; state.open.clear(); savePrefs();
+    series = {}; try { ws && ws.close(); } catch {} ws = null; setLive("", "실시간 연결 대기");
     state.data = store.get("ma-cache-" + state.quote);
-    render(); if (!state.data) scan();
+    render(); scan();
   });
   $("rangeSeg").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
@@ -366,17 +512,16 @@ footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.6}
   });
   $("sort").addEventListener("change", e => { state.sort = e.target.value; savePrefs(); render(); });
   $("search").addEventListener("input", e => { state.q = e.target.value; render(); });
-  $("scanBtn").addEventListener("click", scan);
+  $("scanBtn").addEventListener("click", () => scan(false));
   $("list").addEventListener("click", e => {
     const b = e.target.closest(".itembtn"); if (!b) return;
     const m = b.dataset.m; state.open.has(m) ? state.open.delete(m) : state.open.add(m); render();
   });
 
-  // ---------- start ----------
+  // ---------- start: 저장된 결과를 먼저 보여주고, 항상 새로 수집 후 실시간 연결 ----------
   state.data = store.get("ma-cache-" + state.quote);
   render();
-  const stale = !state.data || Date.now() - state.data.at > 30 * 60 * 1000;
-  if (stale) scan();
+  scan(!!state.data);
 })();
 </script>
 </body>
